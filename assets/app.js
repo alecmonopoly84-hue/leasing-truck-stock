@@ -7,6 +7,8 @@ const truckSVG=`<svg viewBox="0 0 96 96" fill="none" stroke-width="3" stroke-lin
 const dumpSVG=`<svg viewBox="0 0 96 96" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 31h42l7 29H19z"/><path d="M61 42h12l11 12v10H61z"/><circle cx="29" cy="69" r="8"/><circle cx="70" cy="69" r="8"/><path d="M20 31l10-10h33l-9 10"/></svg>`;
 function uniq(a){return[...new Set(a.filter(Boolean))].sort((x,y)=>String(x).localeCompare(String(y),'ru'))}
 function fill(id,a,label){document.getElementById(id).innerHTML=`<option value="">${label}</option>`+a.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}">${v}</option>`).join('')}
+function maskVin(v){v=String(v||'').trim();if(!v)return '—';if(v.length<=6)return '•'.repeat(Math.max(0,v.length-3))+v.slice(-3);return '•'.repeat(v.length-6)+v.slice(-6)}
+function conditionSummary(x){const t=String(x.conditionSummary||x.comment||'').trim();if(!t)return '';const first=t.split('.')[0].trim();return (first||t).slice(0,110)}
 async function init(){
   try{
     const urls=Array.from({length:4},(_,i)=>`./data/stock-part-${i+1}.txt`);
@@ -18,7 +20,7 @@ async function init(){
   fill('brand',uniq(STOCK.map(x=>x.brand)),'Все марки');
   fill('year',uniq(STOCK.map(x=>x.year)).sort((a,b)=>b-a),'Любой');
   fill('wheel',uniq(STOCK.map(x=>x.wheel)),'Любая');
-  fill('locFilter',uniq(STOCK.map(x=>x.location)),'Все локации');
+  fill('locFilter',uniq(STOCK.map(x=>x.district)),'Все регионы');
   readQueryFilters();applyFilters();
   const lot=new URLSearchParams(location.search).get('lot');if(lot&&STOCK.some(x=>x.id===lot))openDetail(lot);
 }
@@ -34,13 +36,13 @@ function readQueryFilters(){
 function setKind(k){kind=k;visible=24;document.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('active',b.dataset.kind===k));applyFilters()}
 function applyFilters(){
  const q=document.getElementById('q').value.toLowerCase().trim(),b=document.getElementById('brand').value,y=+document.getElementById('year').value||0,p=+document.getElementById('price').value||0,w=document.getElementById('wheel').value,l=document.getElementById('locFilter').value,s=document.getElementById('sort').value;
- filtered=STOCK.filter(x=>(kind==='all'||x.kind===kind)&&(!q||(x.brand+' '+x.model+' '+x.modification+' '+x.wheel+' '+x.id+' '+x.location).toLowerCase().includes(q))&&(!b||x.brand===b)&&(!y||x.year>=y)&&(!p||x.price<=p)&&(!w||x.wheel===w)&&(!l||x.location===l));
+ filtered=STOCK.filter(x=>(kind==='all'||x.kind===kind)&&(!q||(x.brand+' '+x.model+' '+(x.modification||'')+' '+x.wheel+' '+x.id+' '+x.district).toLowerCase().includes(q))&&(!b||x.brand===b)&&(!y||x.year>=y)&&(!p||x.price<=p)&&(!w||x.wheel===w)&&(!l||x.district===l));
  if(s==='priceAsc')filtered.sort((a,b)=>(a.price||1e12)-(b.price||1e12));else if(s==='priceDesc')filtered.sort((a,b)=>b.price-a.price);else if(s==='yearDesc')filtered.sort((a,b)=>b.year-a.year);else filtered.sort((a,b)=>(b.score||0)-(a.score||0));render();
 }
 function card(x){
  const deal=x.medianDelta<=-10?`<span class="deal">${Math.abs(x.medianDelta)}% ниже медианы каталога</span>`:'';
- const loc=x.location||x.district||'Россия';
- return`<article class="card"><div class="visual"><div class="placeholder">${x.kind==='tractor'?truckSVG:dumpSVG}<b>Фото готовится</b></div><span class="badge">${kindName(x.kind)}</span>${deal}</div><div class="body"><div class="meta">Лот ${x.id} • ${loc}</div><div class="title">${x.brand} ${x.model}</div><div class="specs"><span class="spec">${x.year||'—'} г.</span>${x.wheel?`<span class="spec">${x.wheel}</span>`:''}<span class="spec">${km(x.mileage)}</span></div>${x.conditionSummary?`<div class="condition">${x.conditionSummary}</div>`:''}<div class="price">${money(x.price)}</div><div class="sub">Цена из последнего загруженного стока. Требует подтверждения.</div><div class="cardactions"><button class="btn secondary" onclick="openDetail('${x.id}')">Подробнее</button><a class="btn primary" href="tel:880022735700" onclick="rememberLot('${x.id}')">Позвонить</a></div></div></article>`;
+ const loc=x.location||x.district||'Россия',state=conditionSummary(x);
+ return`<article class="card"><div class="visual"><div class="placeholder">${x.kind==='tractor'?truckSVG:dumpSVG}<b>Фото готовится</b></div><span class="badge">${kindName(x.kind)}</span>${deal}</div><div class="body"><div class="meta">Лот ${x.id} • ${loc}</div><div class="title">${x.brand} ${x.model}</div><div class="specs"><span class="spec">${x.year||'—'} г.</span>${x.wheel?`<span class="spec">${x.wheel}</span>`:''}<span class="spec">${km(x.mileage)}</span></div>${state?`<div class="condition">${state}</div>`:''}<div class="price">${money(x.price)}</div><div class="sub">Цена из последнего загруженного стока. Требует подтверждения.</div><div class="cardactions"><button class="btn secondary" onclick="openDetail('${x.id}')">Подробнее</button><a class="btn primary" href="tel:880022735700" onclick="rememberLot('${x.id}')">Позвонить</a></div></div></article>`;
 }
 function render(){document.getElementById('count').textContent=fmt.format(filtered.length)+' предложений';const p=filtered.slice(0,visible);document.getElementById('cards').innerHTML=p.length?p.map(card).join(''):'<div class="empty"><b>По выбранным параметрам ничего не найдено.</b><br>Измените фильтры или сформируйте запрос на подбор.</div>';document.getElementById('more').style.display=visible<filtered.length?'inline-flex':'none'}
 function showMore(){visible+=24;render()}
@@ -48,9 +50,9 @@ function rememberLot(id){try{localStorage.setItem('stocktrak_last_lot',id)}catch
 function openDetail(id){
  current=STOCK.find(x=>x.id===id);if(!current)return;const x=current;rememberLot(id);
  document.getElementById('dKind').textContent=kindName(x.kind)+' • лот '+x.id;document.getElementById('dTitle').textContent=x.brand+' '+x.model;document.getElementById('dPrice').textContent=money(x.price);
- const rows=[['Год',x.year||'—'],['Пробег',km(x.mileage)],['Колёсная формула',x.wheel||'—'],['Локация',x.location||x.district||'—'],['Модификация',x.modification||'—'],['VIN',x.vinMasked||'—'],['ПТС',x.pts||'—'],['Ключи',x.keys||'—']];
+ const rows=[['Год',x.year||'—'],['Пробег',km(x.mileage)],['Колёсная формула',x.wheel||'—'],['Регион',x.location||x.district||'—'],['VIN',x.vinMasked||maskVin(x.vin)],['ПТС',x.pts||'—'],['Ключи',x.keys||'—']];
  document.getElementById('dDetails').innerHTML=rows.map(v=>`<div class="detail"><small>${v[0]}</small><b>${v[1]}</b></div>`).join('');
- document.getElementById('dCondition').innerHTML=x.condition?`<b>Комментарий по состоянию</b><br>${x.condition}`:'Состояние и комплектность уточняются при подтверждении лота.';
+ const c=String(x.condition||x.comment||'').trim();document.getElementById('dCondition').innerHTML=c?`<b>Комментарий по состоянию</b><br>${c}`:'Состояние и комплектность уточняются при подтверждении лота.';
  document.getElementById('copyLot').onclick=()=>copyText('Лот '+x.id+' — '+x.brand+' '+x.model,'Номер лота скопирован');
  history.replaceState(null,'','?lot='+encodeURIComponent(id)+'#catalog');document.getElementById('detailModal').classList.add('open');
 }
