@@ -21,6 +21,7 @@ async function init(){
   fill('year',uniq(STOCK.map(x=>x.year)).sort((a,b)=>b-a),'Любой');
   fill('wheel',uniq(STOCK.map(x=>x.wheel)),'Любая');
   fill('locFilter',uniq(STOCK.map(x=>x.district)),'Все регионы');
+  document.getElementById('locFilter').previousElementSibling.textContent='Регион';
   readQueryFilters();applyFilters();
   const lot=new URLSearchParams(location.search).get('lot');if(lot&&STOCK.some(x=>x.id===lot))openDetail(lot);
 }
