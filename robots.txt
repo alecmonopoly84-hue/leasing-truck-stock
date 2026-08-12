@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://alecmonopoly84-hue.github.io/leasing-truck-stock/sitemap.xml
